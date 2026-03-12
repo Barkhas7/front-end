@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Хэрэглэгчийн хуудас</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h2>Хэрэглэгчийн хуудас</h2>
+
+        <input type="number" id="profileId" placeholder="Хэрэглэгчийн дугаар" readonly>
+        <input type="text" id="name" placeholder="Нэр">
+        <input type="email" id="email" placeholder="Цахим шуудан">
+        <input type="text" id="bio" placeholder="Намтар">
+        <input type="text" id="phone" placeholder="Утас">
+
+        <div class="button-group">
+            <button id="createBtn" onclick="createProfile()">Үүсгэх</button>
+            <button onclick="getProfile()">Харах</button>
+            <button onclick="updateProfile()">Шинэчлэх</button>
+            <button onclick="deleteProfile()">Устгах</button>
+            <button onclick="logout()">Гарах</button>
+        </div>
+
+        <p id="profileMessage"></p>
+        <pre id="profileResult"></pre>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
