@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="mn">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,18 +7,24 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <h2>Нэвтрэх</h2>
+    <div class="card">
+        <h1>Нэвтрэх</h1>
+        <p class="subtitle">Профайлаа нээхийн тулд нэвтэрнэ үү.</p>
 
-        <input type="text" id="loginUsername" placeholder="Нэвтрэх нэр">
-        <input type="password" id="loginPassword" placeholder="Нууц үг">
-        <button onclick="loginUser()">Нэвтрэх</button>
+        <form id="loginForm">
+            <label for="username">Хэрэглэгчийн нэр</label>
+            <input id="username" type="text" required>
 
-        <p id="loginMessage"></p>
+            <label for="password">Нууц үг</label>
+            <input id="password" type="password" required>
 
-        <p><a href="register.html">Бүртгүүлэх хуудасруу очих</a></p>
+            <button type="submit">Нэвтрэх</button>
+        </form>
+
+        <p id="message" class="message"></p>
+        <p class="small-text">Бүртгэлгүй юу? <a href="register.html">Энд дарж бүртгүүлнэ үү</a></p>
     </div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=2"></script>
 </body>
 </html>

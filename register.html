@@ -7,18 +7,24 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <h2>Бүртгүүлэх</h2>
+    <div class="card">
+        <h1>Бүртгүүлэх</h1>
+        <p class="subtitle">SOAP authentication service дээр бүртгэлээ үүсгэнэ үү.</p>
 
-        <input type="text" id="registerUsername" placeholder="Бүртгүүлэх нэр">
-        <input type="password" id="registerPassword" placeholder="Нууц үг">
-        <button onclick="registerUser()">Бүртгүүлэх</button>
+        <form id="registerForm">
+            <label for="username">Хэрэглэгчийн нэр</label>
+            <input id="username" type="text" required>
 
-        <p id="registerMessage"></p>
+            <label for="password">Нууц үг</label>
+            <input id="password" type="password" required>
 
-        <p><a href="login.html">Нэвтрэх хуудас руу очих</a></p>
+            <button type="submit">Бүртгүүлэх</button>
+        </form>
+
+        <p id="message" class="message"></p>
+        <p class="small-text">Аль хэдийн бүртгэлтэй юу? <a href="login.html">Нэвтрэх хуудас руу буцах</a></p>
     </div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=2"></script>
 </body>
 </html>
