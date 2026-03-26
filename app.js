@@ -1,333 +1,301 @@
-const SOAP_URL = "http://localhost:8081/auth";
-const JSON_URL = "http://localhost:8082/users";
+var SOAP_URL = "http://localhost:8081/ws";
+var JSON_URL = "http://localhost:8082/users";
 
-function extractSoapReturnValue(xmlText) {
-    const match = xmlText.match(/<return>([\s\S]*?)<\/return>/);
-    return match && match[1] ? match[1].trim() : null;
+if (typeof window !== "undefined") {
+    window.frontendLoaded = true;
 }
 
-async function getUserIdFromToken(token) {
-    const soapBody = `
-        <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ser="http://service.soap.barkhas.com/">
-            <soapenv:Header/>
-            <soapenv:Body>
-                <ser:getUserIdByToken>
-                    <token>${token}</token>
-                </ser:getUserIdByToken>
-            </soapenv:Body>
-        </soapenv:Envelope>
-    `;
+function showMessage(text) {
+    var message = document.getElementById("message");
+    if (message) {
+        message.textContent = text;
+    }
+}
 
-    const response = await fetch(SOAP_URL, {
+function getStoredToken() {
+    return localStorage.getItem("token");
+}
+
+function getStoredUserId() {
+    return localStorage.getItem("userId");
+}
+
+function getStoredProfileId() {
+    return localStorage.getItem("profileId");
+}
+
+function saveSession(token, userId) {
+    localStorage.setItem("token", token);
+    localStorage.setItem("userId", userId);
+}
+
+function clearSession() {
+    localStorage.removeItem("token");
+    localStorage.removeItem("userId");
+    localStorage.removeItem("profileId");
+}
+
+function callSoap(operation, bodyXml) {
+    var envelope = '<?xml version="1.0" encoding="UTF-8"?>'
+        + '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:auth="http://lab06.com/usersoapservice/auth">'
+        + '<soapenv:Header/>'
+        + '<soapenv:Body>'
+        + '<auth:' + operation + '>'
+        + bodyXml
+        + '</auth:' + operation + '>'
+        + '</soapenv:Body>'
+        + '</soapenv:Envelope>';
+
+    return fetch(SOAP_URL, {
         method: "POST",
         headers: {
             "Content-Type": "text/xml;charset=UTF-8"
         },
-        body: soapBody
+        body: envelope
+    }).then(function (response) {
+        return response.text();
+    });
+}
+
+function getXmlValue(xmlText, tagName) {
+    var regex;
+    var match;
+
+    regex = new RegExp("<(?:[A-Za-z0-9_-]+:)?" + tagName + ">([\\s\\S]*?)</(?:[A-Za-z0-9_-]+:)?" + tagName + ">", "i");
+    match = xmlText.match(regex);
+
+    if (match && match.length > 1) {
+        return match[1];
+    }
+
+    return "";
+}
+
+function registerUser(username, password) {
+    var body = "<auth:username>" + username + "</auth:username>"
+        + "<auth:password>" + password + "</auth:password>";
+
+    return callSoap("RegisterUserRequest", body).then(function (xml) {
+        return getXmlValue(xml, "message");
+    });
+}
+
+if (typeof window !== "undefined") {
+    window.registerUser = registerUser;
+}
+
+function loginUser(username, password) {
+    var body = "<auth:username>" + username + "</auth:username>"
+        + "<auth:password>" + password + "</auth:password>";
+
+    return callSoap("LoginUserRequest", body).then(function (xml) {
+        return {
+            message: getXmlValue(xml, "message"),
+            token: getXmlValue(xml, "token"),
+            userId: getXmlValue(xml, "userId")
+        };
+    });
+}
+
+if (typeof window !== "undefined") {
+    window.loginUser = loginUser;
+}
+
+function getProfileByUserId() {
+    return fetch(JSON_URL + "/by-user?userId=" + getStoredUserId(), {
+        headers: {
+            "Authorization": "Bearer " + getStoredToken()
+        }
+    });
+}
+
+function saveProfile(payload) {
+    var currentProfileId = getStoredProfileId();
+    var method = currentProfileId ? "PUT" : "POST";
+    var url = currentProfileId ? JSON_URL + "/" + currentProfileId : JSON_URL;
+
+    return fetch(url, {
+        method: method,
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + getStoredToken()
+        },
+        body: JSON.stringify(payload)
+    });
+}
+
+function deleteProfile() {
+    var profileId = getStoredProfileId();
+    if (!profileId) {
+        return Promise.reject(new Error("Устгах профайл алга байна."));
+    }
+
+    return fetch(JSON_URL + "/" + profileId, {
+        method: "DELETE",
+        headers: {
+            "Authorization": "Bearer " + getStoredToken()
+        }
+    });
+}
+
+function renderProfile(profile) {
+    var profileInfo = document.getElementById("profileInfo");
+    if (!profileInfo) {
+        return;
+    }
+
+    profileInfo.textContent =
+        "Профайлын ID: " + profile.id + "\n"
+        + "Хэрэглэгчийн ID: " + profile.userId + "\n"
+        + "Нэр: " + profile.name + "\n"
+        + "И-мэйл: " + profile.email + "\n"
+        + "Танилцуулга: " + (profile.bio || "") + "\n"
+        + "Утас: " + (profile.phone || "");
+}
+
+var registerForm = document.getElementById("registerForm");
+if (registerForm) {
+    registerForm.addEventListener("submit", function (event) {
+        event.preventDefault();
+        var username = document.getElementById("username").value;
+        var password = document.getElementById("password").value;
+
+        registerUser(username, password)
+            .then(function (message) {
+                showMessage(message);
+            })
+            .catch(function () {
+                showMessage("Бүртгүүлэх хүсэлт амжилтгүй боллоо.");
+            });
+    });
+}
+
+var loginForm = document.getElementById("loginForm");
+if (loginForm) {
+    loginForm.addEventListener("submit", function (event) {
+        event.preventDefault();
+        var username = document.getElementById("username").value;
+        var password = document.getElementById("password").value;
+
+        loginUser(username, password)
+            .then(function (result) {
+                showMessage(result.message);
+
+                if (result.token && result.userId) {
+                    saveSession(result.token, result.userId);
+                    window.location.href = "profile.html";
+                }
+            })
+            .catch(function () {
+                showMessage("Нэвтрэх хүсэлт амжилтгүй боллоо.");
+            });
+    });
+}
+
+var profileForm = document.getElementById("profileForm");
+if (profileForm) {
+    if (!getStoredToken() || !getStoredUserId()) {
+        window.location.href = "login.html";
+    }
+
+    document.getElementById("loadButton").addEventListener("click", function () {
+        getProfileByUserId()
+            .then(function (response) {
+                return response.json().then(function (data) {
+                    return {
+                        ok: response.ok,
+                        data: data
+                    };
+                });
+            })
+            .then(function (result) {
+                if (!result.ok) {
+                    showMessage(result.data.message || "Профайл дуудаж чадсангүй.");
+                    return;
+                }
+
+                localStorage.setItem("profileId", result.data.id);
+                document.getElementById("name").value = result.data.name || "";
+                document.getElementById("email").value = result.data.email || "";
+                document.getElementById("bio").value = result.data.bio || "";
+                document.getElementById("phone").value = result.data.phone || "";
+                renderProfile(result.data);
+                showMessage("Профайл амжилттай дуудагдлаа.");
+            })
+            .catch(function () {
+                showMessage("Профайл дуудаж чадсангүй.");
+            });
     });
 
-    const text = await response.text();
-    const value = extractSoapReturnValue(text);
-    return value ? parseInt(value) : -1;
+    profileForm.addEventListener("submit", function (event) {
+        var hadProfile;
+        var payload;
+
+        event.preventDefault();
+        hadProfile = !!getStoredProfileId();
+        payload = {
+            userId: Number(getStoredUserId()),
+            name: document.getElementById("name").value,
+            email: document.getElementById("email").value,
+            bio: document.getElementById("bio").value,
+            phone: document.getElementById("phone").value
+        };
+
+        saveProfile(payload)
+            .then(function (response) {
+                return response.json().then(function (data) {
+                    return {
+                        ok: response.ok,
+                        data: data
+                    };
+                });
+            })
+            .then(function (result) {
+                if (!result.ok) {
+                    showMessage(result.data.message || "Профайлыг хадгалж чадсангүй.");
+                    return;
+                }
+
+                localStorage.setItem("profileId", result.data.id);
+                renderProfile(result.data);
+                showMessage(hadProfile ? "Профайл амжилттай шинэчлэгдлээ." : "Профайл амжилттай үүслээ.");
+            })
+            .catch(function () {
+                showMessage("Профайлыг хадгалж чадсангүй.");
+            });
+    });
+
+    document.getElementById("deleteButton").addEventListener("click", function () {
+        deleteProfile()
+            .then(function (response) {
+                return response.json().then(function (data) {
+                    return {
+                        ok: response.ok,
+                        data: data
+                    };
+                });
+            })
+            .then(function (result) {
+                if (!result.ok) {
+                    showMessage(result.data.message || "Профайлыг устгаж чадсангүй.");
+                    return;
+                }
+
+                localStorage.removeItem("profileId");
+                document.getElementById("profileForm").reset();
+                document.getElementById("profileInfo").textContent = "";
+                showMessage(result.data.message);
+            })
+            .catch(function (error) {
+                showMessage(error.message || "Профайлыг устгаж чадсангүй.");
+            });
+    });
+
+    document.getElementById("logoutButton").addEventListener("click", function () {
+        clearSession();
+        window.location.href = "login.html";
+    });
 }
 
-function setCreateButtonState(disabled) {
-    const btn = document.getElementById("createBtn");
-    if (btn) btn.disabled = disabled;
-}
 
-function fillProfileForm(profile) {
-    document.getElementById("profileId").value = profile.id || "";
-    document.getElementById("name").value = profile.name || "";
-    document.getElementById("email").value = profile.email || "";
-    document.getElementById("bio").value = profile.bio || "";
-    document.getElementById("phone").value = profile.phone || "";
-}
 
-async function loadMyProfileIfExists() {
-    const token = localStorage.getItem("token");
-    const userId = localStorage.getItem("userId");
-    const message = document.getElementById("profileMessage");
-    const result = document.getElementById("profileResult");
-
-    if (!token || !userId) return;
-
-    try {
-        const response = await fetch(`${JSON_URL}/by-user?userId=${userId}`, {
-            method: "GET",
-            headers: {
-                "Authorization": "Bearer " + token
-            }
-        });
-
-        const text = await response.text();
-
-        if (response.ok) {
-            const json = JSON.parse(text);
-            fillProfileForm(json);
-            result.innerText = JSON.stringify(json, null, 2);
-            message.innerText = "Өмнөх хэрэглэгчийн хуудас ачааллаа.";
-            setCreateButtonState(true);
-        } else {
-            message.innerText = "Хэрэглэгчийн хуудас байхгүй байна. Шинээр үүсгэнэ үү.";
-            setCreateButtonState(false);
-        }
-    } catch (error) {
-        message.innerText = "Хэрэглэгчийн хуудас ачаалах үед алдаа гарлаа: " + error.message;
-    }
-}
-
-async function registerUser() {
-    const username = document.getElementById("registerUsername").value.trim();
-    const password = document.getElementById("registerPassword").value.trim();
-    const message = document.getElementById("registerMessage");
-
-    if (!username || !password) {
-        message.innerText = "Бүртгүүлэх нэр, нууц үгээ оруулна уу.";
-        return;
-    }
-
-    const soapBody = `
-        <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ser="http://service.soap.barkhas.com/">
-            <soapenv:Header/>
-            <soapenv:Body>
-                <ser:registerUser>
-                    <username>${username}</username>
-                    <password>${password}</password>
-                </ser:registerUser>
-            </soapenv:Body>
-        </soapenv:Envelope>
-    `;
-
-    try {
-        const response = await fetch(SOAP_URL, {
-            method: "POST",
-            headers: {
-                "Content-Type": "text/xml;charset=UTF-8"
-            },
-            body: soapBody
-        });
-
-        const text = await response.text();
-        const value = extractSoapReturnValue(text);
-
-        if (!value) {
-            message.innerText = "Бүртгэлийн хариу уншигдсангүй.";
-            return;
-        }
-
-        if (value.includes("successfully")) {
-            message.innerText = "Амжилттай бүртгэгдлээ.";
-        } else if (value.includes("UNIQUE") || value.includes("failed")) {
-            message.innerText = "Энэ нэр өмнө нь бүртгэгдсэн байна.";
-        } else {
-            message.innerText = value;
-        }
-    } catch (error) {
-        message.innerText = "Бүртгэх үед алдаа гарлаа: " + error.message;
-    }
-}
-
-async function loginUser() {
-    const username = document.getElementById("loginUsername").value.trim();
-    const password = document.getElementById("loginPassword").value.trim();
-    const message = document.getElementById("loginMessage");
-
-    const soapBody = `
-        <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ser="http://service.soap.barkhas.com/">
-            <soapenv:Header/>
-            <soapenv:Body>
-                <ser:loginUser>
-                    <username>${username}</username>
-                    <password>${password}</password>
-                </ser:loginUser>
-            </soapenv:Body>
-        </soapenv:Envelope>
-    `;
-
-    try {
-        const response = await fetch(SOAP_URL, {
-            method: "POST",
-            headers: {
-                "Content-Type": "text/xml;charset=UTF-8"
-            },
-            body: soapBody
-        });
-
-        const text = await response.text();
-        const value = extractSoapReturnValue(text);
-
-        if (!value) {
-            message.innerText = "Нэвтрэлт амжилтгүй.";
-            return;
-        }
-
-        if (value.includes("failed") || value.includes("Invalid") || value.includes("null")) {
-            message.innerText = value;
-            return;
-        }
-
-        localStorage.setItem("token", value);
-
-        const userId = await getUserIdFromToken(value);
-        localStorage.setItem("userId", userId);
-
-        message.innerText = "Амжилттай нэвтэрлээ.";
-        window.location.href = "profile.html";
-    } catch (error) {
-        message.innerText = "Нэвтрэх үед алдаа гарлаа: " + error.message;
-    }
-}
-
-async function createProfile() {
-    const token = localStorage.getItem("token");
-    const userId = parseInt(localStorage.getItem("userId"));
-    const message = document.getElementById("profileMessage");
-
-    const data = {
-        userId: userId,
-        name: document.getElementById("name").value,
-        email: document.getElementById("email").value,
-        bio: document.getElementById("bio").value,
-        phone: document.getElementById("phone").value
-    };
-
-    try {
-        const response = await fetch(JSON_URL, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": "Bearer " + token
-            },
-            body: JSON.stringify(data)
-        });
-
-        const text = await response.text();
-        message.innerText = text;
-
-        const match = text.match(/Profile ID:\s*(\d+)/i);
-        if (match && match[1]) {
-            document.getElementById("profileId").value = match[1];
-            setCreateButtonState(true);
-        }
-    } catch (error) {
-        message.innerText = "Create error: " + error.message;
-    }
-}
-
-async function getProfile() {
-    const token = localStorage.getItem("token");
-    const profileId = document.getElementById("profileId").value;
-    const result = document.getElementById("profileResult");
-    const message = document.getElementById("profileMessage");
-
-    if (!profileId) {
-        message.innerText = "Хэрэглэгчийн дугаар олдсонгүй.";
-        return;
-    }
-
-    try {
-        const response = await fetch(`${JSON_URL}/${profileId}`, {
-            method: "GET",
-            headers: {
-                "Authorization": "Bearer " + token
-            }
-        });
-
-        const text = await response.text();
-
-        if (response.ok) {
-            const json = JSON.parse(text);
-            fillProfileForm(json);
-            result.innerText = JSON.stringify(json, null, 2);
-            message.innerText = "Хэрэглэгчийн хуудас ачааллаа.";
-        } else {
-            result.innerText = text;
-            message.innerText = "Хэрэглэгчийн хуудас олдсонгүй.";
-        }
-    } catch (error) {
-        message.innerText = "Get error: " + error.message;
-    }
-}
-
-async function updateProfile() {
-    const token = localStorage.getItem("token");
-    const userId = parseInt(localStorage.getItem("userId"));
-    const profileId = document.getElementById("profileId").value;
-    const message = document.getElementById("profileMessage");
-
-    if (!profileId) {
-        message.innerText = "Эхлээд хэрэглэгчийн хуудас үүсгэнэ үү.";
-        return;
-    }
-
-    const data = {
-        userId: userId,
-        name: document.getElementById("name").value,
-        email: document.getElementById("email").value,
-        bio: document.getElementById("bio").value,
-        phone: document.getElementById("phone").value
-    };
-
-    try {
-        const response = await fetch(`${JSON_URL}/${profileId}`, {
-            method: "PUT",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": "Bearer " + token
-            },
-            body: JSON.stringify(data)
-        });
-
-        const text = await response.text();
-        message.innerText = text;
-    } catch (error) {
-        message.innerText = "Update error: " + error.message;
-    }
-}
-
-async function deleteProfile() {
-    const token = localStorage.getItem("token");
-    const profileId = document.getElementById("profileId").value;
-    const message = document.getElementById("profileMessage");
-
-    if (!profileId) {
-        message.innerText = "Устгах хэрэглэгчийн хуудас байхгүй.";
-        return;
-    }
-
-    try {
-        const response = await fetch(`${JSON_URL}/${profileId}`, {
-            method: "DELETE",
-            headers: {
-                "Authorization": "Bearer " + token
-            }
-        });
-
-        const text = await response.text();
-        message.innerText = text;
-
-        document.getElementById("profileId").value = "";
-        document.getElementById("name").value = "";
-        document.getElementById("email").value = "";
-        document.getElementById("bio").value = "";
-        document.getElementById("phone").value = "";
-        document.getElementById("profileResult").innerText = "";
-
-        setCreateButtonState(false);
-    } catch (error) {
-        message.innerText = "Алдаа: " + error.message;
-    }
-}
-
-function logout() {
-    localStorage.removeItem("token");
-    localStorage.removeItem("userId");
-    window.location.href = "login.html";
-}
-
-window.addEventListener("DOMContentLoaded", () => {
-    if (document.getElementById("profileMessage")) {
-        loadMyProfileIfExists();
-    }
-});
